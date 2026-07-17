@@ -133,7 +133,33 @@ float sampleCpuUsagePercent();
 FanReading readFanState();
 ThermalReading readThermalState();
 
-// student TODO : memory and processes
+// memory / disk / process table
+struct MemSnapshot
+{
+    float totalRamMB;
+    float usedRamMB;
+    float totalSwapMB;
+    float usedSwapMB;
+};
+
+struct DiskSnapshot
+{
+    float totalGB;
+    float usedGB;
+};
+
+struct ProcessRow
+{
+    int pid;
+    string name;
+    string state;
+    float cpuPercent;
+    float memPercent;
+};
+
+MemSnapshot readMemSnapshot();
+DiskSnapshot readDiskSnapshot(const char *mountPath = "/");
+vector<ProcessRow> collectProcessRows();
 
 // student TODO : network
 

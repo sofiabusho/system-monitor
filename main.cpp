@@ -218,7 +218,111 @@ void memoryProcessesWindow(const char *id, ImVec2 size, ImVec2 position)
     ImGui::SetWindowSize(id, size);
     ImGui::SetWindowPos(id, position);
 
-    // student TODO : add code here for the memory and process information
+    const MemSnapshot mem = readMemSnapshot();
+    const DiskSnapshot disk = readDiskSnapshot("/");
+
+    const float ramFrac = (mem.totalRamMB > 0.0f) ? (mem.usedRamMB / mem.totalRamMB) : 0.0f;
+    const float swapFrac = (mem.totalSwapMB > 0.0f) ? (mem.usedSwapMB / mem.totalSwapMB) : 0.0f;
+    const float diskFrac = (disk.totalGB > 0.0f) ? (disk.usedGB / disk.totalGB) : 0.0f;
+
+    char ramOverlay[64];
+    snprintf(ramOverlay, sizeof(ramOverlay), "%.1f / %.1f MB", mem.usedRamMB, mem.totalRamMB);
+    ImGui::Text("Physical Memory (RAM)");
+    ImGui::ProgressBar(ramFrac, ImVec2(-1.0f, 18.0f), ramOverlay);
+
+    char swapOverlay[64];
+    snprintf(swapOverlay, sizeof(swapOverlay), "%.1f / %.1f MB", mem.usedSwapMB, mem.totalSwapMB);
+    ImGui::Text("Virtual Memory (SWAP)");
+    ImGui::ProgressBar(swapFrac, ImVec2(-1.0f, 18.0f), swapOverlay);
+
+    char diskOverlay[64];
+    snprintf(diskOverlay, sizeof(diskOverlay), "%.1f / %.1f GB", disk.usedGB, disk.totalGB);
+    ImGui::Text("Disk (/)");
+    ImGui::ProgressBar(diskFrac, ImVec2(-1.0f, 18.0f), diskOverlay);
+
+    ImGui::Separator();
+
+    if (ImGui::BeginTabBar("ProcessTabs"))
+    {
+        if (ImGui::BeginTabItem("Processes"))
+        {
+            static char filterBuf[128] = "";
+            static std::map<int, bool> selected;
+
+            ImGui::InputText("Filter", filterBuf, sizeof(filterBuf));
+            ImGui::SameLine();
+            if (ImGui::Button("Clear selection"))
+                selected.clear();
+
+            // Refresh process list about twice per second
+            static vector<ProcessRow> cached;
+            static double lastRefresh = 0.0;
+            const double now = ImGui::GetTime();
+            if (cached.empty() || (now - lastRefresh) >= 0.5)
+            {
+                cached = collectProcessRows();
+                lastRefresh = now;
+            }
+
+            const ImGuiTableFlags flags =
+                ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
+                ImGuiTableFlags_ScrollY | ImGuiTableFlags_Resizable;
+
+            if (ImGui::BeginTable("ProcessTable", 5, flags, ImVec2(-1.0f, -1.0f)))
+            {
+                ImGui::TableSetupScrollFreeze(0, 1);
+                ImGui::TableSetupColumn("PID");
+                ImGui::TableSetupColumn("Name");
+                ImGui::TableSetupColumn("State");
+                ImGui::TableSetupColumn("CPU usage");
+                ImGui::TableSetupColumn("Memory usage");
+                ImGui::TableHeadersRow();
+
+                for (size_t i = 0; i < cached.size(); ++i)
+                {
+                    const ProcessRow &proc = cached[i];
+                    char pidText[32];
+                    snprintf(pidText, sizeof(pidText), "%d", proc.pid);
+
+                    if (filterBuf[0] != '\0')
+                    {
+                        const bool nameHit = proc.name.find(filterBuf) != string::npos;
+                        const bool pidHit = string(pidText).find(filterBuf) != string::npos;
+                        if (!nameHit && !pidHit)
+                            continue;
+                    }
+
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+
+                    const bool isSelected = selected[proc.pid];
+                    char label[64];
+                    snprintf(label, sizeof(label), "%d##proc%d", proc.pid, proc.pid);
+                    if (ImGui::Selectable(label, isSelected,
+                                          ImGuiSelectableFlags_SpanAllColumns |
+                                              ImGuiSelectableFlags_AllowItemOverlap))
+                    {
+                        // Toggle so multiple rows can stay selected
+                        selected[proc.pid] = !isSelected;
+                    }
+
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::TextUnformatted(proc.name.c_str());
+                    ImGui::TableSetColumnIndex(2);
+                    ImGui::TextUnformatted(proc.state.c_str());
+                    ImGui::TableSetColumnIndex(3);
+                    ImGui::Text("%.1f%%", proc.cpuPercent);
+                    ImGui::TableSetColumnIndex(4);
+                    ImGui::Text("%.1f%%", proc.memPercent);
+                }
+
+                ImGui::EndTable();
+            }
+
+            ImGui::EndTabItem();
+        }
+        ImGui::EndTabBar();
+    }
 
     ImGui::End();
 }
