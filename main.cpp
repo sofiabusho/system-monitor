@@ -41,6 +41,73 @@ using namespace gl;
 #include IMGUI_IMPL_OPENGL_LOADER_CUSTOM
 #endif
 
+static const int kPlotSamples = 120;
+
+struct LivePlotState
+{
+    float samples[kPlotSamples];
+    int writeIndex;
+    bool filled;
+    bool paused;
+    float fps;
+    float yMax;
+    double lastPushSeconds;
+    float latest;
+
+    LivePlotState(float defaultFps, float defaultYMax)
+        : writeIndex(0), filled(false), paused(false),
+          fps(defaultFps), yMax(defaultYMax), lastPushSeconds(0.0), latest(0.0f)
+    {
+        for (int i = 0; i < kPlotSamples; ++i)
+            samples[i] = 0.0f;
+    }
+
+    void maybePush(float value, double nowSeconds)
+    {
+        latest = value;
+        if (paused)
+            return;
+
+        const float safeFps = (fps < 1.0f) ? 1.0f : fps;
+        const double interval = 1.0 / static_cast<double>(safeFps);
+        if (lastPushSeconds > 0.0 && (nowSeconds - lastPushSeconds) < interval)
+            return;
+
+        lastPushSeconds = nowSeconds;
+        samples[writeIndex] = value;
+        writeIndex = (writeIndex + 1) % kPlotSamples;
+        if (writeIndex == 0)
+            filled = true;
+    }
+
+    void drawControls(float fpsMin, float fpsMax, float yMin, float yMaxLimit)
+    {
+        ImGui::Checkbox("Pause graph", &paused);
+        ImGui::SliderFloat("FPS", &fps, fpsMin, fpsMax, "%.0f");
+        ImGui::SliderFloat("Y scale", &yMax, yMin, yMaxLimit, "%.0f");
+        if (yMax < yMin)
+            yMax = yMin;
+    }
+
+    void drawPlot(const char *plotId, const char *overlay)
+    {
+        const int count = filled ? kPlotSamples : writeIndex;
+        if (count <= 0)
+        {
+            ImGui::TextDisabled("Waiting for samples...");
+            return;
+        }
+
+        // Plot chronologically: oldest -> newest
+        float ordered[kPlotSamples];
+        const int start = filled ? writeIndex : 0;
+        for (int i = 0; i < count; ++i)
+            ordered[i] = samples[(start + i) % kPlotSamples];
+
+        ImGui::PlotLines(plotId, ordered, count, 0, overlay, 0.0f, yMax, ImVec2(-1.0f, 100.0f));
+    }
+};
+
 // systemWindow, display information for the system monitorization
 void systemWindow(const char *id, ImVec2 size, ImVec2 position)
 {
@@ -65,6 +132,81 @@ void systemWindow(const char *id, ImVec2 size, ImVec2 position)
     ImGui::Text("  zombie           : %d", tasks.zombie);
     ImGui::Text("  traced/stopped   : %d", tasks.stopped);
     ImGui::Text("  idle             : %d", tasks.idle);
+
+    ImGui::Separator();
+    if (ImGui::BeginTabBar("SystemResourceTabs"))
+    {
+        const double now = ImGui::GetTime();
+
+        if (ImGui::BeginTabItem("CPU"))
+        {
+            static LivePlotState cpuPlot(30.0f, 100.0f);
+            const float usage = sampleCpuUsagePercent();
+            cpuPlot.maybePush(usage, now);
+
+            char overlay[64];
+            snprintf(overlay, sizeof(overlay), "%.1f%%", cpuPlot.latest);
+
+            cpuPlot.drawControls(1.0f, 60.0f, 10.0f, 200.0f);
+            cpuPlot.drawPlot("##CpuUsagePlot", overlay);
+            ImGui::Text("Current CPU usage: %.1f%%", cpuPlot.latest);
+            ImGui::EndTabItem();
+        }
+
+        if (ImGui::BeginTabItem("Fan"))
+        {
+            static LivePlotState fanPlot(10.0f, 5000.0f);
+            const FanReading fan = readFanState();
+            const float speed = fan.available ? static_cast<float>(fan.speedRpm) : 0.0f;
+            fanPlot.maybePush(speed, now);
+
+            if (!fan.available)
+                ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.2f, 1.0f),
+                                   "Fan sensors not available on this machine");
+            else
+            {
+                ImGui::Text("Status : %s", fan.enabled ? "enabled / active" : "disabled");
+                ImGui::Text("Speed  : %d RPM", fan.speedRpm);
+                ImGui::Text("Level  : %s", fan.level.c_str());
+            }
+
+            char overlay[64];
+            if (fan.available)
+                snprintf(overlay, sizeof(overlay), "%d RPM", fan.speedRpm);
+            else
+                snprintf(overlay, sizeof(overlay), "n/a");
+
+            fanPlot.drawControls(1.0f, 60.0f, 500.0f, 10000.0f);
+            fanPlot.drawPlot("##FanSpeedPlot", overlay);
+            ImGui::EndTabItem();
+        }
+
+        if (ImGui::BeginTabItem("Thermal"))
+        {
+            static LivePlotState thermalPlot(10.0f, 100.0f);
+            const ThermalReading thermal = readThermalState();
+            const float temp = thermal.available ? thermal.celsius : 0.0f;
+            thermalPlot.maybePush(temp, now);
+
+            if (!thermal.available)
+                ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.2f, 1.0f),
+                                   "Thermal sensors not available on this machine");
+
+            char overlay[64];
+            if (thermal.available)
+                snprintf(overlay, sizeof(overlay), "%.1f C", thermalPlot.latest);
+            else
+                snprintf(overlay, sizeof(overlay), "n/a");
+
+            thermalPlot.drawControls(1.0f, 60.0f, 20.0f, 120.0f);
+            thermalPlot.drawPlot("##ThermalPlot", overlay);
+            if (thermal.available)
+                ImGui::Text("Current temperature: %.1f C", thermalPlot.latest);
+            ImGui::EndTabItem();
+        }
+
+        ImGui::EndTabBar();
+    }
 
     ImGui::End();
 }

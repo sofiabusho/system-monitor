@@ -108,12 +108,30 @@ struct TaskCounts
     int idle;
 };
 
+struct FanReading
+{
+    bool available;
+    bool enabled;
+    int speedRpm;
+    string level;
+};
+
+struct ThermalReading
+{
+    bool available;
+    float celsius;
+};
+
 string CPUinfo();
 const char *getOsName();
 string readLoggedInUser();
 string readHostname();
 string readCpuModelName();
 TaskCounts countTasksByState();
+bool readCpuTimes(CPUStats &out);
+float sampleCpuUsagePercent();
+FanReading readFanState();
+ThermalReading readThermalState();
 
 // student TODO : memory and processes
 
