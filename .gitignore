@@ -1,0 +1,6 @@
+# Build artifacts
+*.o
+monitor
+imgui.ini
+*.exe
+*.out
