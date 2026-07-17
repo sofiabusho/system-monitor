@@ -63,7 +63,7 @@ struct Proc
 
 struct IP4
 {
-    char *name;
+    string name;
     char addressBuffer[INET_ADDRSTRLEN];
 };
 
@@ -72,28 +72,37 @@ struct Networks
     vector<IP4> ip4s;
 };
 
-struct TX
+// Matches /proc/net/dev Receive columns
+struct NetRecvCounters
 {
-    int bytes;
-    int packets;
-    int errs;
-    int drop;
-    int fifo;
-    int frame;
-    int compressed;
-    int multicast;
+    unsigned long long bytes;
+    unsigned long long packets;
+    unsigned long long errs;
+    unsigned long long drop;
+    unsigned long long fifo;
+    unsigned long long frame;
+    unsigned long long compressed;
+    unsigned long long multicast;
 };
 
-struct RX
+// Matches /proc/net/dev Transmit columns
+struct NetXmitCounters
 {
-    int bytes;
-    int packets;
-    int errs;
-    int drop;
-    int fifo;
-    int colls;
-    int carrier;
-    int compressed;
+    unsigned long long bytes;
+    unsigned long long packets;
+    unsigned long long errs;
+    unsigned long long drop;
+    unsigned long long fifo;
+    unsigned long long colls;
+    unsigned long long carrier;
+    unsigned long long compressed;
+};
+
+struct NetIfaceStats
+{
+    string name;
+    NetRecvCounters rx;
+    NetXmitCounters tx;
 };
 
 // system facts (OS, user, host, tasks, CPU model)
@@ -161,6 +170,8 @@ MemSnapshot readMemSnapshot();
 DiskSnapshot readDiskSnapshot(const char *mountPath = "/");
 vector<ProcessRow> collectProcessRows();
 
-// student TODO : network
+Networks collectIpv4Addresses();
+vector<NetIfaceStats> collectNetIfaceStats();
+string formatByteSize(unsigned long long bytes);
 
 #endif

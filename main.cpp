@@ -334,7 +334,158 @@ void networkWindow(const char *id, ImVec2 size, ImVec2 position)
     ImGui::SetWindowSize(id, size);
     ImGui::SetWindowPos(id, position);
 
-    // student TODO : add code here for the network information
+    const Networks nets = collectIpv4Addresses();
+    const vector<NetIfaceStats> ifaces = collectNetIfaceStats();
+    const double twoGiB = 2.0 * 1024.0 * 1024.0 * 1024.0;
+
+    ImGui::Text("IPv4 addresses");
+    if (nets.ip4s.empty())
+        ImGui::TextDisabled("No IPv4 interfaces found");
+    else
+    {
+        for (size_t i = 0; i < nets.ip4s.size(); ++i)
+        {
+            const IP4 &ip = nets.ip4s[i];
+            ImGui::BulletText("%s : %s", ip.name.c_str(), ip.addressBuffer);
+        }
+    }
+
+    ImGui::Separator();
+
+    if (ImGui::BeginTabBar("NetCounterTabs"))
+    {
+        if (ImGui::BeginTabItem("RX"))
+        {
+            if (ImGui::BeginTable("RxTable", 9,
+                                  ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
+                                      ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY,
+                                  ImVec2(-1.0f, 140.0f)))
+            {
+                ImGui::TableSetupScrollFreeze(0, 1);
+                ImGui::TableSetupColumn("Interface");
+                ImGui::TableSetupColumn("bytes");
+                ImGui::TableSetupColumn("packets");
+                ImGui::TableSetupColumn("errs");
+                ImGui::TableSetupColumn("drop");
+                ImGui::TableSetupColumn("fifo");
+                ImGui::TableSetupColumn("frame");
+                ImGui::TableSetupColumn("compressed");
+                ImGui::TableSetupColumn("multicast");
+                ImGui::TableHeadersRow();
+
+                for (size_t i = 0; i < ifaces.size(); ++i)
+                {
+                    const NetIfaceStats &n = ifaces[i];
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::TextUnformatted(n.name.c_str());
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::Text("%llu", (unsigned long long)n.rx.bytes);
+                    ImGui::TableSetColumnIndex(2);
+                    ImGui::Text("%llu", (unsigned long long)n.rx.packets);
+                    ImGui::TableSetColumnIndex(3);
+                    ImGui::Text("%llu", (unsigned long long)n.rx.errs);
+                    ImGui::TableSetColumnIndex(4);
+                    ImGui::Text("%llu", (unsigned long long)n.rx.drop);
+                    ImGui::TableSetColumnIndex(5);
+                    ImGui::Text("%llu", (unsigned long long)n.rx.fifo);
+                    ImGui::TableSetColumnIndex(6);
+                    ImGui::Text("%llu", (unsigned long long)n.rx.frame);
+                    ImGui::TableSetColumnIndex(7);
+                    ImGui::Text("%llu", (unsigned long long)n.rx.compressed);
+                    ImGui::TableSetColumnIndex(8);
+                    ImGui::Text("%llu", (unsigned long long)n.rx.multicast);
+                }
+                ImGui::EndTable();
+            }
+            ImGui::EndTabItem();
+        }
+
+        if (ImGui::BeginTabItem("TX"))
+        {
+            if (ImGui::BeginTable("TxTable", 9,
+                                  ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
+                                      ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY,
+                                  ImVec2(-1.0f, 140.0f)))
+            {
+                ImGui::TableSetupScrollFreeze(0, 1);
+                ImGui::TableSetupColumn("Interface");
+                ImGui::TableSetupColumn("bytes");
+                ImGui::TableSetupColumn("packets");
+                ImGui::TableSetupColumn("errs");
+                ImGui::TableSetupColumn("drop");
+                ImGui::TableSetupColumn("fifo");
+                ImGui::TableSetupColumn("colls");
+                ImGui::TableSetupColumn("carrier");
+                ImGui::TableSetupColumn("compressed");
+                ImGui::TableHeadersRow();
+
+                for (size_t i = 0; i < ifaces.size(); ++i)
+                {
+                    const NetIfaceStats &n = ifaces[i];
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::TextUnformatted(n.name.c_str());
+                    ImGui::TableSetColumnIndex(1);
+                    ImGui::Text("%llu", (unsigned long long)n.tx.bytes);
+                    ImGui::TableSetColumnIndex(2);
+                    ImGui::Text("%llu", (unsigned long long)n.tx.packets);
+                    ImGui::TableSetColumnIndex(3);
+                    ImGui::Text("%llu", (unsigned long long)n.tx.errs);
+                    ImGui::TableSetColumnIndex(4);
+                    ImGui::Text("%llu", (unsigned long long)n.tx.drop);
+                    ImGui::TableSetColumnIndex(5);
+                    ImGui::Text("%llu", (unsigned long long)n.tx.fifo);
+                    ImGui::TableSetColumnIndex(6);
+                    ImGui::Text("%llu", (unsigned long long)n.tx.colls);
+                    ImGui::TableSetColumnIndex(7);
+                    ImGui::Text("%llu", (unsigned long long)n.tx.carrier);
+                    ImGui::TableSetColumnIndex(8);
+                    ImGui::Text("%llu", (unsigned long long)n.tx.compressed);
+                }
+                ImGui::EndTable();
+            }
+            ImGui::EndTabItem();
+        }
+
+        ImGui::EndTabBar();
+    }
+
+    ImGui::Separator();
+    ImGui::Text("Usage bars (scale 0 - 2 GB)");
+
+    if (ImGui::BeginTabBar("NetUsageTabs"))
+    {
+        if (ImGui::BeginTabItem("RX"))
+        {
+            for (size_t i = 0; i < ifaces.size(); ++i)
+            {
+                const NetIfaceStats &n = ifaces[i];
+                const float fraction = static_cast<float>(
+                    std::min(1.0, static_cast<double>(n.rx.bytes) / twoGiB));
+                const string label = formatByteSize(n.rx.bytes);
+                ImGui::Text("%s", n.name.c_str());
+                ImGui::ProgressBar(fraction, ImVec2(-1.0f, 16.0f), label.c_str());
+            }
+            ImGui::EndTabItem();
+        }
+
+        if (ImGui::BeginTabItem("TX"))
+        {
+            for (size_t i = 0; i < ifaces.size(); ++i)
+            {
+                const NetIfaceStats &n = ifaces[i];
+                const float fraction = static_cast<float>(
+                    std::min(1.0, static_cast<double>(n.tx.bytes) / twoGiB));
+                const string label = formatByteSize(n.tx.bytes);
+                ImGui::Text("%s", n.name.c_str());
+                ImGui::ProgressBar(fraction, ImVec2(-1.0f, 16.0f), label.c_str());
+            }
+            ImGui::EndTabItem();
+        }
+
+        ImGui::EndTabBar();
+    }
 
     ImGui::End();
 }
