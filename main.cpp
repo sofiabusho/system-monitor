@@ -104,7 +104,10 @@ struct LivePlotState
         for (int i = 0; i < count; ++i)
             ordered[i] = samples[(start + i) % kPlotSamples];
 
-        ImGui::PlotLines(plotId, ordered, count, 0, overlay, 0.0f, yMax, ImVec2(-1.0f, 100.0f));
+        // This ImGui build does not treat width -1 as "fill"; use available width explicitly
+        // (same approach as the working reference monitor).
+        const float width = ImGui::GetContentRegionAvail().x;
+        ImGui::PlotLines(plotId, ordered, count, 0, overlay, 0.0f, yMax, ImVec2(width, 100.0f));
     }
 };
 
@@ -125,15 +128,7 @@ void systemWindow(const char *id, ImVec2 size, ImVec2 position)
     ImGui::Text("Hostname         : %s", host.c_str());
     ImGui::Text("CPU              : %s", cpuModel.c_str());
     ImGui::Separator();
-    ImGui::Text("Tasks : %d total", tasks.total);
-    ImGui::Text("  running          : %d", tasks.running);
-    ImGui::Text("  sleeping         : %d", tasks.sleeping);
-    ImGui::Text("  uninterruptible  : %d", tasks.uninterruptible);
-    ImGui::Text("  zombie           : %d", tasks.zombie);
-    ImGui::Text("  traced/stopped   : %d", tasks.stopped);
-    ImGui::Text("  idle             : %d", tasks.idle);
 
-    ImGui::Separator();
     if (ImGui::BeginTabBar("SystemResourceTabs"))
     {
         const double now = ImGui::GetTime();
@@ -207,6 +202,15 @@ void systemWindow(const char *id, ImVec2 size, ImVec2 position)
 
         ImGui::EndTabBar();
     }
+
+    ImGui::Separator();
+    ImGui::Text("Tasks : %d total", tasks.total);
+    ImGui::Text("  running          : %d", tasks.running);
+    ImGui::Text("  sleeping         : %d", tasks.sleeping);
+    ImGui::Text("  uninterruptible  : %d", tasks.uninterruptible);
+    ImGui::Text("  zombie           : %d", tasks.zombie);
+    ImGui::Text("  traced/stopped   : %d", tasks.stopped);
+    ImGui::Text("  idle             : %d", tasks.idle);
 
     ImGui::End();
 }
@@ -514,7 +518,7 @@ int main(int, char **)
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
     SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
     SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
-    SDL_Window *window = SDL_CreateWindow("Dear ImGui SDL2+OpenGL3 example", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, window_flags);
+    SDL_Window *window = SDL_CreateWindow("System Monitor", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, window_flags);
     SDL_GLContext gl_context = SDL_GL_CreateContext(window);
     SDL_GL_MakeCurrent(window, gl_context);
     SDL_GL_SetSwapInterval(1); // Enable vsync
